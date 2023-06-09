@@ -1,0 +1,31 @@
+version: '3'
+
+services:
+  redis:
+    image: redis:latest
+    container_name: redis
+    ports:
+      - 6379:6379
+    volumes:
+      - chat-demo:/usr/src/redis
+  frontend:
+    build: 
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - 3000:3000
+    volumes:
+      - chat-demo:/usr/src/frontend
+  backend:
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: backend
+    ports:
+      - 4000:4000
+    volumes:
+      - chat-demo:/usr/src/backend
+
+volumes:
+  chat-demo:
