@@ -17,15 +17,15 @@ import { Namespace, Socket } from 'socket.io';
     origin: ['http://localhost:3000'],
   },
 })
-export class ChatEventGateway
-  implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect
-{
+export class ChatEventGateway implements OnGatewayInit, OnGatewayConnection, OnGatewayDisconnect {
   @WebSocketServer() nameSpace: Namespace;
   // 현재 네임스페이스를 지정했기 때문에 @WebSocketServer 데코레이터가 반환하는 값은
   // 서버 인스턴스가 아닌 네임스페이스 인스턴스이다.
   // 만약 네임스페이스를 설정하지 않았다면 @WebSocketServer 데코레이터가 반환하는 값은
   // 서버 인스턴스가 되고, 그 때는 타입을 다음과 같이 서버 타입으로 설정해야 한다.
   // @WebSocketServer() server: Socket;
+
+  private createdRooms: string[] = []; // 유저가 생성한 방을 서버에 저장
 
   // 초기화 이후 실행
   afterInit() {
@@ -43,7 +43,18 @@ export class ChatEventGateway
     });
 
     this.nameSpace.adapter.on('delete-room', (room) => {
+      const deletedRoomIndex = this.createdRooms.findIndex((r) => r === room);
+
+      if (!deletedRoomIndex) return;
+
+      this.nameSpace.emit('delete-room', room);
+
+      this.createdRooms.splice(deletedRoomIndex, 1);
+
       console.log(`Room: ${room} is deleted.`);
+
+      // socket은 자신의 Id와 일치하는 room을 갖고, 연결이 끊기면 socket id의 이름을 가진 room도 삭제된다.
+      // 삭제된 room 중에서 유저가 생성한 room이 있는지 체크하고, 존재하면 delete-room 이벤트를 발생시킨다.
     });
   }
 
@@ -61,10 +72,23 @@ export class ChatEventGateway
   }
 
   @SubscribeMessage('sendMessage') // 이벤트 리스너를 설정한다. (socket.on)
-  handleSendedMessage(@ConnectedSocket() socket: Socket, @MessageBody() message: string) {
+  sendMessageHandler(@ConnectedSocket() socket: Socket, @MessageBody() { room, message }: MessagePayload) {
     // @ConnectedSocket: 연결된 소켓 인스턴스를 반환
     // @MessageBody: 브라우저 측에서 보낸 데이터를 반환
-    socket.broadcast.emit('sendMessage', { user: socket, message });
+    // socket.broadcast.emit('sendMessage', { user: socket.id, message });
     // broadcast는 데이터를 보낸 socket을 제외한 모든 socket들에게 이벤트를 보낸다.
+
+    socket.broadcast.to(room).emit('sendMessage', { user: socket.id, message });
+    // to 메서드는 특정 room에게만 메세지를 보내거나, 개인에게 메세지를 보낼 때 활용된다.
+  }
+
+  @SubscribeMessage('show-rooms')
+  showRoomsHandler() {
+    return this.createdRooms;
+  }
+
+  @SubscribeMessage('create-room')
+  createRoomHandler(@ConnectedSocket() socket: Socket, @MessageBody() room: string) {
+    // TODO: 룸 생성 핸들러 작성
   }
 }
